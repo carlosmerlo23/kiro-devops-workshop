@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Validar step de tests en workflows",
+      "trigger": "PreToolUse",
+      "description": "Valida que los workflows de GitHub Actions incluyan un step de tests antes de escribirlos",
+      "matcher": "fs_write|str_replace",
+      "action": {
+        "type": "agent",
+        "prompt": "Antes de escribir o modificar un archivo en .github/workflows/, verifica que el contenido YAML incluya un step de ejecución de tests (por ejemplo: npm test, jest, o similar). Si no incluye un step de tests, advierte al usuario y sugiere agregarlo antes de proceder. Según los estándares del equipo, todo workflow debe incluir steps de lint, test y build."
+      }
+    }
+  ]
+}

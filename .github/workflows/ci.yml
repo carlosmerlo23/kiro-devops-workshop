@@ -1,0 +1,45 @@
+name: "Integración Continua - Pipeline Principal"
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  integracion-continua:
+    name: "Lint, Tests y Build"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Ejecutar lint con ESLint
+        run: npm run lint
+
+      - name: Ejecutar tests con Jest
+        run: npm test
+
+      - name: Build del proyecto
+        run: npm run build
+
+      - name: Notificar fallo a Slack
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "El workflow 'Integración Continua' falló en ${{ github.repository }} (rama: ${{ github.ref_name }})"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.CARVAJAL_SLACK_WEBHOOK }}

@@ -1,0 +1,15 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "Recordar crear test para archivos nuevos",
+      "trigger": "PostFileCreate",
+      "description": "Recuerda crear el test correspondiente cuando se crea un archivo .js en src/",
+      "matcher": "src/.*\\.js$",
+      "action": {
+        "type": "agent",
+        "prompt": "Se ha creado un nuevo archivo .js en src/. Recuerda al usuario que debe crear el archivo de test correspondiente en la carpeta tests/ siguiendo la convención: si el archivo es src/ejemplo.js, el test debe ser tests/ejemplo.test.js. Usa Jest como framework de testing."
+      }
+    }
+  ]
+}
