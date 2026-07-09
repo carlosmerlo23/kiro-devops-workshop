@@ -1,0 +1,18 @@
+# Configuración de labels automáticas según archivos modificados
+# Usado por actions/labeler en el workflow de validación de PRs
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file: '**/*.md'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+source:
+  - changed-files:
+      - any-glob-to-any-file: 'src/**'

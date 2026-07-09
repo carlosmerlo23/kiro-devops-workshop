@@ -1,4 +1,6 @@
-name: "Integración Continua - Pipeline Principal"
+# Pipeline de Integración Continua
+# Se ejecuta automáticamente en push a main y en pull requests
+name: "CI Pipeline"
 
 on:
   push:
@@ -8,38 +10,59 @@ on:
 
 jobs:
   integracion-continua:
-    name: "Lint, Tests y Build"
+    name: "Lint, Tests y Build (Node ${{ matrix.node-version }})"
+    # Ejecutar en la última versión de Ubuntu
     runs-on: ubuntu-latest
 
+    # Estrategia de matrix para probar en múltiples versiones de Node.js
+    strategy:
+      matrix:
+        node-version: [18, 20]
+
     steps:
+      # Paso 1: Descargar el código del repositorio
       - name: Checkout del código
         uses: actions/checkout@v4
 
-      - name: Configurar Node.js 20
+      # Paso 2: Configurar la versión de Node.js definida en la matrix
+      - name: Configurar Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: ${{ matrix.node-version }}
 
+      # Paso 3: Cachear node_modules para acelerar ejecuciones subsecuentes
+      - name: Cachear dependencias de node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ matrix.node-version }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-${{ matrix.node-version }}-
+
+      # Paso 4: Instalar dependencias usando npm ci (instalación limpia y reproducible)
       - name: Instalar dependencias
         run: npm ci
 
-      - name: Ejecutar lint con ESLint
+      # Paso 4: Ejecutar linting con ESLint para validar calidad de código
+      - name: Ejecutar linting
         run: npm run lint
 
-      - name: Ejecutar tests con Jest
-        run: npm test
+      # Paso 5: Ejecutar tests con Jest para verificar funcionalidad
+      - name: Ejecutar tests
+        run: npm run test
 
-      - name: Build del proyecto
+      # Paso 6: Ejecutar build del proyecto
+      - name: Ejecutar build
         run: npm run build
 
+      # Paso 7: Notificar a Slack si el pipeline falla
       - name: Notificar fallo a Slack
         if: failure()
         uses: slackapi/slack-github-action@v1
         with:
           payload: |
             {
-              "text": "El workflow 'Integración Continua' falló en ${{ github.repository }} (rama: ${{ github.ref_name }})"
+              "text": "El workflow 'CI Pipeline' falló en ${{ github.repository }} (rama: ${{ github.ref_name }})"
             }
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.CARVAJAL_SLACK_WEBHOOK }}

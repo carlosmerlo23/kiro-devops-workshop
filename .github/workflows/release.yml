@@ -1,0 +1,102 @@
+# Workflow de Release Automático
+# Se dispara cuando se crea un tag con formato semántico (v*.*.*)
+name: "Publicar Release"
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: "Generar Release y Publicar Artefacto"
+    runs-on: ubuntu-latest
+
+    steps:
+      # Paso 1: Descargar el código con historial completo para generar changelog
+      - name: Checkout del código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # Paso 2: Configurar Node.js 20
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Paso 3: Instalar dependencias
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Paso 4: Ejecutar tests antes de publicar
+      - name: Ejecutar tests
+        run: npm test
+
+      # Paso 5: Ejecutar build del proyecto
+      - name: Ejecutar build
+        run: npm run build
+
+      # Paso 6: Empaquetar artefacto de build para adjuntar al release
+      - name: Empaquetar artefacto
+        run: tar -czf build-${{ github.ref_name }}.tar.gz src/ package.json package-lock.json
+
+      # Paso 7: Generar changelog automático basado en commits desde el último tag
+      - name: Generar changelog
+        id: changelog
+        run: |
+          # Obtener el tag anterior para generar el changelog
+          PREVIOUS_TAG=$(git tag --sort=-creatordate | sed -n '2p')
+          if [ -z "$PREVIOUS_TAG" ]; then
+            # Si no hay tag anterior, usar todos los commits
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" HEAD)
+          else
+            # Generar changelog desde el último tag hasta el actual
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" ${PREVIOUS_TAG}..HEAD)
+          fi
+          # Guardar changelog en output (manejo de múltiples líneas)
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      # Paso 8: Crear GitHub Release con el changelog y adjuntar el artefacto
+      - name: Crear GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Release ${{ github.ref_name }}"
+          body: |
+            ## Cambios en ${{ github.ref_name }}
+
+            ${{ steps.changelog.outputs.changelog }}
+          files: build-${{ github.ref_name }}.tar.gz
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Paso 9: Notificar éxito a Slack
+      - name: Notificar release exitoso a Slack
+        if: success()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "Nuevo release ${{ github.ref_name }} publicado exitosamente en ${{ github.repository }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.CARVAJAL_SLACK_WEBHOOK }}
+
+      # Paso 10: Notificar fallo a Slack
+      - name: Notificar fallo a Slack
+        if: failure()
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "El release ${{ github.ref_name }} falló en ${{ github.repository }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.CARVAJAL_SLACK_WEBHOOK }}

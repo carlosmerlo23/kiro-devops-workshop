@@ -1,0 +1,101 @@
+# Validación de Pull Requests
+# Se ejecuta únicamente en pull requests para garantizar calidad antes del merge
+name: "Validación de Pull Request"
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # Job 1: Validar que el título del PR sigue la convención de Conventional Commits
+  validar-titulo:
+    name: "Validar título del PR"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Verificar formato Conventional Commits
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          # Tipos permitidos según Conventional Commits
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            perf
+            test
+            build
+            ci
+            chore
+            revert
+
+  # Job 2: Ejecutar tests con cobertura y validar umbral mínimo
+  cobertura:
+    name: "Tests y cobertura de código"
+    runs-on: ubuntu-latest
+
+    steps:
+      # Paso 1: Descargar el código del repositorio
+      - name: Checkout del código
+        uses: actions/checkout@v4
+
+      # Paso 2: Configurar Node.js 20
+      - name: Configurar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Paso 3: Instalar dependencias
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Paso 4: Ejecutar tests con cobertura y umbral mínimo de 80%
+      - name: Ejecutar tests con cobertura
+        run: npx jest --coverage --coverageThreshold='{"global":{"branches":80,"functions":80,"lines":80,"statements":80}}'
+
+      # Paso 5: Agregar comentario en el PR con el resumen de cobertura
+      - name: Comentar resumen de cobertura en el PR
+        if: always()
+        uses: MishaKav/jest-coverage-comment@v1
+        with:
+          coverage-summary-path: ./coverage/coverage-summary.json
+          title: "Resumen de Cobertura de Código"
+          badge-title: "Cobertura"
+
+  # Job 3: Asignar labels automáticas según los archivos modificados
+  labels:
+    name: "Asignar labels automáticas"
+    runs-on: ubuntu-latest
+
+    steps:
+      # Paso 1: Asignar labels según los archivos modificados en el PR
+      - name: Asignar labels por archivos modificados
+        uses: actions/labeler@v5
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # Paso 2: Notificar a Slack si algún job falla
+  notificar-fallo:
+    name: "Notificar fallo"
+    runs-on: ubuntu-latest
+    needs: [validar-titulo, cobertura, labels]
+    if: failure()
+
+    steps:
+      - name: Notificar fallo a Slack
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "La validación del PR #${{ github.event.pull_request.number }} falló en ${{ github.repository }}"
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.CARVAJAL_SLACK_WEBHOOK }}
